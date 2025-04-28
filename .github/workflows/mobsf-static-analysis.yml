@@ -1,3 +1,57 @@
+# name: MobSF Static Analysis
+
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+
+# jobs:
+#   static-analysis:
+#     runs-on: ubuntu-latest
+
+#     env:
+#       APK_FILE_PATH: path/InsecureBankv2.apk # <-- Update this to the correct APK path!
+
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v2
+
+#       - name: Start MobSF Docker with API Key Disabled
+#         run: |
+#           docker pull opensecurity/mobile-security-framework-mobsf
+#           docker run -d -p 8000:8000 \
+#             --name mobsf \
+#             -e MOBSF_API_KEY=disabled \
+#             opensecurity/mobile-security-framework-mobsf
+#           sleep 30  # Wait for MobSF to fully initialize
+
+#       - name: Upload APK to MobSF
+#         run: |
+#           echo "Uploading APK..."
+#           response=$(curl -s -X POST "http://localhost:8000/api/v1/upload" \
+#             -F "file=@${APK_FILE_PATH}")
+
+#           echo "Upload response: $response"
+#           scan_hash=$(echo "$response" | jq -r '.hash')
+
+#           echo "SCAN_HASH=$scan_hash" >> $GITHUB_ENV
+
+#       - name: Generate Report
+#         run: |
+#           echo "Generating report..."
+#           report_response=$(curl -s -X POST "http://localhost:8000/api/v1/report_json" \
+#             -H "Content-Type: application/json" \
+#             -d "{\"hash\":\"${{ env.SCAN_HASH }}\"}")
+
+#           echo "$report_response" > mobsf_report.json
+#           echo "Report saved to mobsf_report.json"
+
+#       - name: Upload MobSF Report as Artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: mobsf-static-analysis-report
+#           path: mobsf_report.json
+
 name: MobSF Static Analysis
 
 on:
@@ -10,36 +64,42 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      APK_FILE_PATH: path/InsecureBankv2.apk # <-- Update this to the correct APK path!
+      APK_FILE_PATH: path/to/your.apk # <-- Set your correct APK path here!
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v2
 
-      - name: Start MobSF Docker with API Key Disabled
+      - name: Start MobSF Docker
         run: |
           docker pull opensecurity/mobile-security-framework-mobsf
-          docker run -d -p 8000:8000 \
-            --name mobsf \
-            -e MOBSF_API_KEY=disabled \
-            opensecurity/mobile-security-framework-mobsf
-          sleep 30  # Wait for MobSF to fully initialize
+          docker run -d -p 8000:8000 --name mobsf opensecurity/mobile-security-framework-mobsf
+          sleep 30  # Let MobSF initialize
+
+      - name: Extract MobSF API Key
+        id: extract_api_key
+        run: |
+          API_KEY=$(docker logs mobsf 2>&1 | grep -oP 'API Key : \K\S+')
+          echo "Extracted API Key: $API_KEY"
+          echo "API_KEY=$API_KEY" >> $GITHUB_ENV
 
       - name: Upload APK to MobSF
         run: |
-          echo "Uploading APK..."
+          echo "Uploading APK to MobSF..."
           response=$(curl -s -X POST "http://localhost:8000/api/v1/upload" \
-            -F "file=@${APK_FILE_PATH}")
+            -F "file=@${APK_FILE_PATH}" \
+            -H "Authorization: myAPIKey" \)
 
           echo "Upload response: $response"
           scan_hash=$(echo "$response" | jq -r '.hash')
 
           echo "SCAN_HASH=$scan_hash" >> $GITHUB_ENV
 
-      - name: Generate Report
+      - name: Generate MobSF JSON Report
         run: |
           echo "Generating report..."
           report_response=$(curl -s -X POST "http://localhost:8000/api/v1/report_json" \
+            -H "Authorization: myAPIKey" \
             -H "Content-Type: application/json" \
             -d "{\"hash\":\"${{ env.SCAN_HASH }}\"}")
 
