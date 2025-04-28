@@ -22,7 +22,7 @@ jobs:
       - name: Start MobSF Docker
         run: |
           docker pull opensecurity/mobile-security-framework-mobsf
-          docker run -d -p 8000:8000 --name mobsf opensecurity/mobile-security-framework-mobsf
+          docker run -d -p 8000:8000 --name mobsf --user root opensecurity/mobile-security-framework-mobsf
           sleep 30  # Wait for MobSF to initialize
 
       - name: Set Fixed API Key inside MobSF
