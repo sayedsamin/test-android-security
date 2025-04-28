@@ -1,0 +1,71 @@
+name: MobSF Static Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+
+    env:
+      #   MOBSF_API_KEY: ${{ secrets.MOBSF_API_KEY }}
+      MOBSF_API_KEY: myAwesomeapikey123 # Replace with your actual API key
+
+      APK_FILE_PATH: path/InsecureBankv2.apk # Adjust this!
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Start MobSF Docker
+        run: |
+          docker pull opensecurity/mobile-security-framework-mobsf
+          docker run -d -p 8000:8000 --name mobsf opensecurity/mobile-security-framework-mobsf
+          sleep 30  # Wait for MobSF to initialize
+
+      - name: Set Fixed API Key inside MobSF
+        run: |
+          # Install tools
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+          # Find MobSF container ID
+          CONTAINER_ID=$(docker ps -qf "name=mobsf")
+
+          # Replace API Key inside settings.py
+          docker exec $CONTAINER_ID sed -i "s/^API_KEY = .*/API_KEY = \"${MOBSF_API_KEY}\"/" /root/.MobSF/settings.py
+
+          # Restart container
+          docker restart $CONTAINER_ID
+          sleep 30  # Wait after restart
+
+      - name: Upload APK to MobSF
+        run: |
+          echo "Uploading APK..."
+          response=$(curl -s -X POST "http://localhost:8000/api/v1/upload" \
+            -F "file=@${APK_FILE_PATH}" \
+            -H "Authorization: ${MOBSF_API_KEY}")
+
+          echo "Upload response: $response"
+          scan_hash=$(echo "$response" | jq -r '.hash')
+
+          echo "SCAN_HASH=$scan_hash" >> $GITHUB_ENV
+
+      - name: Generate Report
+        run: |
+          echo "Generating report..."
+          report_response=$(curl -s -X POST "http://localhost:8000/api/v1/report_json" \
+            -H "Authorization: ${MOBSF_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"hash\":\"${{ env.SCAN_HASH }}\"}")
+
+          echo "$report_response" > mobsf_report.json
+          echo "Report saved to mobsf_report.json"
+
+      - name: Upload MobSF Report as Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: mobsf-static-analysis-report
+          path: mobsf_report.json
